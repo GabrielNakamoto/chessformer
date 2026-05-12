@@ -70,7 +70,7 @@ for t in range(steps):
     loss = step(*random_batch(batch_size))
     Tensor.training = False
     
-    if t % 5 == 0:
+    if t % 1000 == 0:
         xp, xg, yp, yv = random_batch(256)
         preds = model(xp, xg)[0].masked_fill(yp < 0, -1e9).argmax(axis=-1)
         targets = yp.maximum(0).argmax(axis=-1)
