@@ -1,5 +1,6 @@
 #!/bin/bash
 
+apt-get update && apt-get install -y clang-18
 python3 -m venv .venv
 source .venv/bin/activate
 pip install chess numpy tinygrad wandb huggingface_hub datasets
