@@ -23,8 +23,8 @@ class TransformerBlock:
         attn = q.scaled_dot_product_attention(k, v, is_causal=False).transpose(2,1).reshape((bchsz, seqln, self.dim))
         return self.attn_proj(attn)
     def __call__(self, x: Tensor) -> Tensor:
-        x = x + self._attention(self.attn_norm(x)).dropout(0.1)
-        return x + self.ffn_norm(x).sequential(self.ffn).dropout(0.1)
+        x = x + self._attention(self.attn_norm(x)).dropout(0.05)
+        return x + self.ffn_norm(x).sequential(self.ffn).dropout(0.05)
 
 class Model:
     def __init__(self, dim: int, layers: int, n_global, n_heads: int):

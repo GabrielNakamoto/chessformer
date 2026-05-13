@@ -18,7 +18,7 @@ Y_outcome = np.lib.format.open_memmap("outcomes.np", shape=(N,))
 d_model = 256
 depth = 10
 heads = 8
-c_value = 0.25
+c_value = 0.1
 batch_size = 512
 warmup_steps = 2e3
 peak_lr = 3e-4
@@ -44,15 +44,21 @@ run = wandb.init(
     }
 )
 
+valid_N = 5000
+train_N = N - valid_N
+
 def random_batch(n):
-    samples = np.random.randint(0, len(X_pieces), size=n)
+    samples = np.random.randint(0, train_N, size=n)
     xp = Tensor(np.asarray(X_pieces[samples]), dtype=dtypes.int16)
     xg = Tensor(np.asarray(X_games[samples]), dtype=dtypes.int16)
     Y_p = Tensor(np.asarray(Y_move[samples]), dtype=dtypes.float32)
     Y_v = Tensor(np.asarray(Y_outcome[samples]), dtype=dtypes.float32)
     return xp, xg, Y_p, Y_v
 
-eval_xp, eval_xg, eval_yp, eval_yv = random_batch(1024)
+eval_xp = Tensor(np.asarray(X_pieces[-valid_N:]), dtype=dtypes.int16)
+eval_xg = Tensor(np.asarray(X_games[-valid_N:]), dtype=dtypes.int16)
+eval_yp = Tensor(np.asarray(Y_move[-valid_N:]), dtype=dtypes.float32)
+eval_yv = Tensor(np.asarray(Y_outcome[-valid_N:]), dtype=dtypes.float32)
 
 @TinyJit
 def step(xp, xg, yp, yv):
@@ -61,7 +67,7 @@ def step(xp, xg, yp, yv):
     policy_logits = policy_logits.masked_fill(yp < 0, -1e9)
     yp = yp.maximum(0)
     policy_loss = policy_logits.cross_entropy(yp)
-    value_loss = (yv.squeeze(-1) - value_logits).square().mean()
+    value_loss = (yv.squeeze(-1) * 0.9 - value_logits).square().mean()
     loss = policy_loss + c_value * value_loss
     loss.backward()
     optim.step()
@@ -85,5 +91,5 @@ for t in range(steps):
         acc = (preds == targets).float().mean().item()
         # print(f"step: {t}, loss={loss.item():.2f}, acc={acc*100.:.2f}%")
         run.log({"acc":acc*100, "loss":loss.item(), "policy_loss" : policy_loss.item(), "value_loss" : value_loss.item()})
-    if t % 1000:
+    if t % 1000 == 0:
         safe_save(get_state_dict(model), "model.safetensors", metadata=run.config.as_dict())
