@@ -74,6 +74,7 @@ def step(xp, xg, yp, yv):
     return loss, policy_loss, value_loss
 
 for t in range(steps):
+    Tensor.training = True
     if t < warmup_steps: 
         lr = peak_lr * (t + 1) / warmup_steps
     else:
@@ -81,15 +82,15 @@ for t in range(steps):
         lr = peak_lr * 0.5 * (1 + np.cos(np.pi * progress))
     optim.lr.assign(Tensor([lr]))
 
-    Tensor.training = True
     loss, policy_loss, value_loss = step(*random_batch(batch_size))
-    Tensor.training = False
     
     if t % 100 == 0:
+        Tensor.training = False
         preds = model(eval_xp, eval_xg)[0].masked_fill(eval_yp < 0, -1e9).argmax(axis=-1)
         targets = eval_yp.maximum(0).argmax(axis=-1)
         acc = (preds == targets).float().mean().item()
         # print(f"step: {t}, loss={loss.item():.2f}, acc={acc*100.:.2f}%")
         run.log({"acc":acc*100, "loss":loss.item(), "policy_loss" : policy_loss.item(), "value_loss" : value_loss.item()})
     if t % 1000 == 0:
+        Tensor.training = False
         safe_save(get_state_dict(model), "model.safetensors", metadata=run.config.as_dict())
