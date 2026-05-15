@@ -70,7 +70,7 @@ x = np.memmap(f"{OUT_DIR}/x.bin", dtype=np.uint8, mode="w+", shape=(N, 8, 64))
 yz = np.memmap(f"{OUT_DIR}/yz.bin", dtype=np.float32, mode="w+", shape=(N, 3))
 yp = np.memmap(f"{OUT_DIR}/yp.bin", dtype=np.int8, mode="w+", shape=(N, 1858))
 
-for start in tqdm(range(8, N, 512)):
+for start in tqdm(range(0, N, 512)):
     end = min(start + 512, N)
     xs, yzs, yps = tensorize_batch(dataset[start:end])
     x[start:end]=np.stack(xs).astype(np.uint8)

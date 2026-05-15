@@ -1,4 +1,6 @@
 **/__pycache__/*
+**/*.parquet
+data/*/
 .venv/
 wandb/
 *.np
