@@ -1,4 +1,5 @@
 from tinygrad.tensor import Tensor
+from tinygrad.helpers import Context
 from tinygrad.engine.jit import TinyJit
 import wandb, os
 from model import Model, build_mixed_precision
@@ -8,7 +9,6 @@ from tinygrad.dtype import dtypes
 from tinygrad.device import Device
 from datasets import load_dataset_builder
 
-print(Device.DEFAULT)
 
 N = int(load_dataset_builder("gRa1ne/decorrelated-chess-3.8m").info.splits['train'].num_examples)
 x = Tensor.empty(N, 64, dtype=dtypes.uint8, device="DISK:data/tensors/x.bin").to('CPU')
@@ -23,16 +23,14 @@ config={
     "hidden" : 128,
     "depth" : 5,
     "heads" : 4,
-    # "n_params" : n_params,
     "c_value" : 0.0,
     "batch_size" : 512,
     "training_steps" : 50000,
     "training_examples" : train_N
-    # "peak_lr" : peak_lr,
 }
 
 def random_batch():
-    samples = Tensor.randint(config['batch_size'], high=train_N, dtype=dtypes.uint32)
+    samples = Tensor.randint(config['batch_size'], high=train_N, dtype=dtypes.uint32, device='CPU')
     return x[samples].to(Device.DEFAULT), xi[samples].to(Device.DEFAULT).float(), yp[samples].to(Device.DEFAULT).float()
 
 model = Model(config['hidden'], config['depth'], config['heads'], use_lc_attn=True)
@@ -57,15 +55,15 @@ def eval_model():
 
 @TinyJit
 def step(xp, xg, yp):
-    opt1.zero_grad()
-    opt2.zero_grad()
-    policy_logits = model(xp, xg)
-    policy_logits = policy_logits.masked_fill(yp < 0, -1e9)
+    opt1.zero_grad(); opt2.zero_grad()
+    policy_logits = model(xp, xg).masked_fill(yp < 0, -1e9)
     yp = yp.maximum(0)
     loss = policy_logits.cross_entropy(yp).backward()
-    opt1.step()
-    opt2.step()
+    opt1.step(); opt2.step()
     return loss
+
+print("Device:", Device.DEFAULT)
+print(f"Model size: {config['n_params']/1e6:.2f}m params")
 
 for t in range(config['training_steps']):
     Tensor.training = True
@@ -75,7 +73,7 @@ for t in range(config['training_steps']):
         Tensor.training = False
         acc = eval_model()
         if logger: logger.log({"acc":acc*100, "loss":loss.item()})
-        print(f"step: {t}, loss={loss.item():.2f}, acc={acc*100.:.2f}%")
+        print(f"step: {t:5d}, loss={loss.item():.2f}, acc={acc*100.:.2f}%")
     if t % 1000 == 0:
         Tensor.training = False
         safe_save(get_state_dict(model), "model.safetensors", metadata=config)

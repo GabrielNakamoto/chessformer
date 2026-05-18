@@ -1,11 +1,11 @@
 from tinygrad.tensor import Tensor
 from tinygrad.dtype import dtypes
-from chessformer.data import build_move_mapping
 from tinygrad.nn import Embedding, Linear, RMSNorm
+from tinygrad.device import Device
 import math
 
-map, _ = build_move_mapping()
-policy_map = Tensor([fr_ * 64 + to_ for fr_, to_, _ in map], dtype=dtypes.int32)
+policy_map = Tensor.empty(1858-66, device="DISK:data/tensors/move_map.bin", dtype=dtypes.int32).to(Device.DEFAULT)
+underpromo_legal_mask = Tensor([i for i in range(72) if i not in [3, 4, 5, 69, 70, 71]]).to(Device.DEFAULT)
 
 def build_mixed_precision(params):
     for p in params:
@@ -90,11 +90,14 @@ class Model:
         self.blocks = [TransformerBlock(dim, n_heads, use_lc_attn=use_lc_attn) for _ in range(layers)]
         self.policy_from_proj = BF16Linear(dim, 64)
         self.policy_to_proj = BF16Linear(dim, 64)
+        self.underpromo_proj = BF16Linear(dim, 9) # (3 dirs x 3 pieces)
     def __call__(self, pieces: Tensor, global_features: Tensor) -> Tensor:
         x = self.piece_emb(pieces) + self.proj_glob(global_features).unsqueeze(1)
         x = x.sequential(self.blocks)
         x = self.final_norm(x.float()).cast(dtypes.bfloat16)
         q = self.policy_from_proj(x)
         k = self.policy_to_proj(x)
+        p = self.underpromo_proj(x[:, 48:56]).reshape(-1, 72)
+        p = p[:, underpromo_legal_mask]
         logits_4096 = (q @ k.transpose(-2, -1)).reshape(-1, 64*64)
-        return logits_4096[:, policy_map].float()
+        return logits_4096[:, policy_map].cat(dim=-1).float()
