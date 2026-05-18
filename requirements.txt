@@ -1,0 +1,6 @@
+chess  
+numpy 
+tinygrad 
+wandb 
+huggingface_hub 
+datasets

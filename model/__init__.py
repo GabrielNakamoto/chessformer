@@ -1,2 +1,2 @@
-from .model import Model, build_mixed_precision
+from .model import Model
 from .search import search

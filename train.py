@@ -1,20 +1,18 @@
 from tinygrad.tensor import Tensor
-from tinygrad.helpers import Context
 from tinygrad.engine.jit import TinyJit
 import wandb, os
-from model import Model, build_mixed_precision
+from model import Model
 from tinygrad.nn.optim import AdamW, Muon
 from tinygrad.nn.state import get_parameters, safe_save, get_state_dict
 from tinygrad.dtype import dtypes
 from tinygrad.device import Device
 from datasets import load_dataset_builder
 
-
 N = int(load_dataset_builder("gRa1ne/decorrelated-chess-3.8m").info.splits['train'].num_examples)
-x = Tensor.empty(N, 64, dtype=dtypes.uint8, device="DISK:data/tensors/x.bin").to('CPU')
-xi = Tensor.empty(N, 9, dtype=dtypes.uint8, device="DISK:data/tensors/xi.bin").to('CPU')
-yp = Tensor.empty(N, 1858, dtype=dtypes.int8, device="DISK:data/tensors/yp.bin").to('CPU')
-yz = Tensor.empty(N, 3, dtype=dtypes.float32, device="DISK:data/tensors/yz.bin").to('CPU')
+x = Tensor.empty(N, 64, dtype=dtypes.uint8, device="DISK:tensors/x.bin").to('CPU')
+xi = Tensor.empty(N, 9, dtype=dtypes.uint8, device="DISK:tensors/xi.bin").to('CPU')
+yp = Tensor.empty(N, 1858, dtype=dtypes.int8, device="DISK:tensors/yp.bin").to('CPU')
+yz = Tensor.empty(N, 3, dtype=dtypes.float32, device="DISK:tensors/yz.bin").to('CPU')
 
 valid_N = 5000
 train_N = N - valid_N
@@ -34,9 +32,9 @@ def random_batch():
     return x[samples].to(Device.DEFAULT), xi[samples].to(Device.DEFAULT).float(), yp[samples].to(Device.DEFAULT).float()
 
 model = Model(config['hidden'], config['depth'], config['heads'], use_lc_attn=True)
-config['n_params'] = sum(map(Tensor.numel, get_state_dict(model).values()))
 params = get_parameters(model)
-build_mixed_precision(params)
+config['n_params'] = sum(map(Tensor.numel, params))
+
 matrix_params = [p for p in params if p.ndim == 2]
 highdim_params = [p for p in params if p.ndim != 2]
 
@@ -46,9 +44,7 @@ opt2 = AdamW(highdim_params)
 logger = wandb.init(entity="raine1-me", project="chessformer", config=config) if os.getenv('WANDB', False) else None
 
 def eval_model():
-    exp = x[-valid_N:].to(Device.DEFAULT)
-    exi = xi[-valid_N:].to(Device.DEFAULT).float()
-    eyp = yp[-valid_N:].to(Device.DEFAULT).float()
+    exp, exi, eyp = x[-valid_N:].to(Device.DEFAULT), xi[-valid_N:].to(Device.DEFAULT).float(), yp[-valid_N:].to(Device.DEFAULT).float()
     preds = model(exp, exi).masked_fill(eyp < 0, -1e9).argmax(axis=-1)
     targets = eyp.maximum(0).argmax(axis=-1)
     return (preds == targets).float().mean().item()
@@ -72,8 +68,8 @@ for t in range(config['training_steps']):
     if t % 10 == 0:
         Tensor.training = False
         acc = eval_model()
-        if logger: logger.log({"acc":acc*100, "loss":loss.item()})
         print(f"step: {t:5d}, loss={loss.item():.2f}, acc={acc*100.:.2f}%")
+        if logger: logger.log({"acc":acc*100, "loss":loss.item()})
     if t % 1000 == 0:
         Tensor.training = False
         safe_save(get_state_dict(model), "model.safetensors", metadata=config)

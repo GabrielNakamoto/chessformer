@@ -1,9 +1,10 @@
 #!/bin/bash
-
-apt-get update && apt-get install -y clang-18
+apt-get update && apt-get -y install clang
 python3 -m venv .venv
 source .venv/bin/activate
-pip install chess numpy tinygrad wandb huggingface_hub datasets
+pip install -r requirements.txt
 wandb login
-python3 data.py 10000000
-python3 train.py
+hf login
+python3 data/process.py
+python3 data/tables.py
+WANDB=1 python3 train.py

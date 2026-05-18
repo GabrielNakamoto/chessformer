@@ -4,17 +4,12 @@ from tinygrad.nn import Embedding, Linear, RMSNorm
 from tinygrad.device import Device
 import math
 
-policy_map = Tensor.empty(1858-66, device="DISK:data/tensors/move_map.bin", dtype=dtypes.int32).to(Device.DEFAULT)
+policy_map = Tensor.empty(1858-66, device="DISK:tensors/move_map.bin", dtype=dtypes.int32).to(Device.DEFAULT)
 underpromo_legal_mask = Tensor([i for i in range(72) if i not in [3, 4, 5, 69, 70, 71]]).to(Device.DEFAULT)
-
-def build_mixed_precision(params):
-    for p in params:
-        if p.dtype == dtypes.float32 and p.ndim >= 2:
-            p.bf16 = p.cast(dtypes.bfloat16).realize()
 
 class BF16Linear(Linear):
     def __call__(self, x):
-        w = getattr(self.weight, "_bf16", None) or self.weight
+        w = self.weight.cast(dtypes.bfloat16)
         out = x.linear(w.T)
         return out + self.bias if self.bias is not None else out
 
@@ -100,4 +95,4 @@ class Model:
         p = self.underpromo_proj(x[:, 48:56]).reshape(-1, 72)
         p = p[:, underpromo_legal_mask]
         logits_4096 = (q @ k.transpose(-2, -1)).reshape(-1, 64*64)
-        return logits_4096[:, policy_map].cat(dim=-1).float()
+        return logits_4096[:, policy_map].cat(p, dim=-1).float()
