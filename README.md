@@ -21,30 +21,9 @@ Inspired by leela. 1858 element tensor constructed from a mapping of every possi
 Essentially a transformer network with an input embedding block and policy head output.
 
 Notable design choices and domain improvements:
-- Leela 'chessformer'/smolgen architecture, implemented as an opptional attention flag. Improves attention with relative position encoding for attention, heuristically describing the semantic relation between positions through chess moves rather than euclidian distance.[^1][^2]
+- Leela 'chessformer'/smolgen architecture, implemented as an opptional attention flag. Improves attention with relative position encoding, heuristically describing the semantic relation between positions through chess moves rather than euclidian distance.[^1][^2]
 - Muon optimizer on 2d matrices to speed up convergence[^3]
 - Mixed precision linear layers and activation functions for massive tensor core gains[^4]
-
-```mermaid
-flowchart TD
-    P[pieces<br/>B x 64] --> PE[Piece Embedding<br/>13 -> dim]
-    G[global_features<br/>B x 9] --> GP[BF16Linear<br/>9 -> dim]
-    GP --> GU[unsqueeze seq dim]
-    PE --> ADD((+))
-    GU --> ADD
-    ADD --> X[x: B x 64 x dim]
-
-    X --> BLK[TransformerBlock x N layers]
-
-    BLK --> FNL[RMSNorm final_norm]
-    FNL --> Q[policy_from_proj<br/>dim -> 64]
-    FNL --> K[policy_to_proj<br/>dim -> 64]
-    Q --> MM[Q · Kᵀ -> 64x64]
-    K --> MM
-    MM --> FLAT[reshape -> 4096]
-    FLAT --> GATHER[gather policy_map<br/>-> 1792 logits]
-```
-
 
 [^1]: https://lczero.org/blog/2024/02/transformer-progress/
 [^2]: https://arxiv.org/abs/2409.12272
